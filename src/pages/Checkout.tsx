@@ -171,7 +171,7 @@ export default function Checkout() {
           order_id: data.id,
           handler: async (response: any) => {
             try {
-              const verifyRes = await fetch('/api/razorpay/verify', {
+              const verifyRes = await fetch('https://karmagully-website.onrender.com/api/razorpay/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(response)
