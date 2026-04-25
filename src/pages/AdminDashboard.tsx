@@ -16,6 +16,7 @@ import { auth, db } from '../lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { seedProducts } from '../seed';
+const API_BASE = "https://karmagully-website.onrender.com";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'orders' | 'admins' | 'settings' | 'coupons' | 'pages'>('overview');
