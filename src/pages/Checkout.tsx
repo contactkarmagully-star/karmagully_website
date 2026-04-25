@@ -8,6 +8,7 @@ import { createOrder } from '../services/orderService';
 import { getCoupon, Coupon } from '../services/couponService';
 import { auth } from '../lib/firebase';
 import { Tag, CheckCircle2 } from 'lucide-react';
+const API_BASE = "https://karmagully-website.onrender.com";
 
 export default function Checkout() {
   const { cart, total, clearCart } = useCart();
@@ -123,7 +124,7 @@ export default function Checkout() {
       if (!orderId) throw new Error("Database Write Failed");
       
       // Trigger Notifications (Email + Telegram) in background
-      fetch('/api/notifications/order', {
+      fetch(`${API_BASE}/api/notifications/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -149,7 +150,7 @@ export default function Checkout() {
 
     if (formData.paymentMode === 'Online') {
       try {
-        const response = await fetch('/api/razorpay/order', {
+        const response = await fetch('https://karmagully-website.onrender.com/api/razorpay/order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ amount: discountedTotal, receipt: `order_${Date.now()}` })
