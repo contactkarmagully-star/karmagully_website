@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-neon-purple: #9333ea;
+  --color-neon-blue: #3b82f6;
+  --color-neon-pink: #ec4899;
+  
+  --color-dark-bg: #050505;
+  --color-dark-surface: #111111;
+  --color-dark-border: #262626;
+  
+  --color-accent-purple: #a855f7;
+  --color-accent-blue: #3b82f6;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-bg text-slate-100 font-sans antialiased selection:bg-purple-600/30;
+  }
+}
+
+.text-gradient {
+  @apply text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500;
+}
+
+.bg-gradient-accent {
+  @apply bg-gradient-to-br from-purple-600 to-blue-500;
+}
+
+.neon-shadow-purple {
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+}
+
+.glass-morphism {
+  @apply bg-black/40 backdrop-blur-md border border-white/10;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-dark-bg;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-dark-border rounded-full hover:bg-neutral-700 transition-colors;
+}

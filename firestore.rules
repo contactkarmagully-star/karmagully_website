@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'c.b.sharma321@gmail.com'
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Products ---
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidProduct(incoming());
+      allow update: if isAdmin() && isValidProduct(incoming());
+      allow delete: if isAdmin();
+      
+      function isValidProduct(data) {
+        return data.keys().hasAll(['name', 'price', 'imageUrl', 'category'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+          && data.price is number && data.price >= 0
+          && data.imageUrl is string && data.imageUrl.size() <= 1000000
+          && data.category is string && data.category.size() <= 100
+          && (!data.keys().contains('stock') || (data.stock is number && data.stock >= 0));
+      }
+    }
+
+    // --- Orders ---
+    match /orders/{orderId} {
+      // Anyone can create an order (required for guest checkout)
+      allow create: if isValidOrder(incoming());
+      
+      // Admins can read all, individuals can read their own if authenticated and associated
+      allow get: if isAdmin() || (isSignedIn() && resource.data.customerInfo.email == request.auth.token.email);
+      allow list: if isAdmin() || (isSignedIn() && resource.data.customerInfo.email == request.auth.token.email);
+
+      // Only admins can update status
+      allow update: if isAdmin() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['orderStatus', 'paymentStatus'])
+      );
+
+      function isValidOrder(data) {
+        return data.keys().hasAll(['customerInfo', 'totalAmount', 'paymentType', 'orderStatus', 'address', 'createdAt', 'items'])
+          && data.totalAmount is number && data.totalAmount >= 0
+          && data.paymentType in ['COD', 'Online']
+          && data.orderStatus is string
+          && data.createdAt == request.time;
+      }
+    }
+    
+    // --- Admins ---
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- Coupons ---
+    match /coupons/{code} {
+      allow read: if true; // Needed to check coupon validity
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- Settings ---
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Pages ---
+    match /pages/{slug} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidPage(incoming());
+      allow delete: if isAdmin();
+
+      function isValidPage(data) {
+        return data.keys().hasAll(['title', 'slug', 'content', 'updatedAt'])
+          && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+          && data.slug is string && data.slug.size() > 0
+          && data.content is list
+          && data.updatedAt is number;
+      }
+    }
+  }
+}

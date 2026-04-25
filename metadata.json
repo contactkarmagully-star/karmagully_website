@@ -1,0 +1,6 @@
+{
+  "name": "KARMAGULLY",
+  "description": "Premium Anime Metal Posters & Wall Art Store",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["E-commerce", "Payments", "Admin Dashboard"]
+}
