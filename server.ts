@@ -6,6 +6,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { Resend } from "resend";
 import axios from "axios";
+import cors from "cors";
 
 dotenv.config();
 
