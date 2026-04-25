@@ -761,7 +761,7 @@ function SettingsTab({ settings, onSave }: { settings: AppSettings, onSave: (s: 
                 type="button"
                 onClick={async () => {
                   try {
-                    const res = await fetch('/api/test-telegram');
+                    const res = await fetch(`${API_BASE}/api/test-telegram`);
                     const data = await res.json();
                     if (data.success) {
                       alert("✅ Test message sent!");
