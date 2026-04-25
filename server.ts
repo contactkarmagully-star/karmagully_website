@@ -14,6 +14,9 @@ async function startServer() {
   const app = express();
 const PORT = process.env.PORT || 3000;
   app.use(express.json());
+  app.use(cors({
+  origin: "*"
+}));
 
   // Resend Initialization
   const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
