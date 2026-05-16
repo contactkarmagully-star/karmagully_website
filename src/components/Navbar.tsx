@@ -1,13 +1,18 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Menu, X, User, Search, Instagram, Twitter, Facebook, Send, Phone, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Menu, X, User, Search, Instagram, Twitter, Facebook, Send, Phone, ChevronDown, Tag } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../hooks/useCart';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { subscribeToSettings, AppSettings } from '../services/settingsService';
+import { subscribeToSettings } from '../services/settingsService';
+import { AppSettings, Category } from '../types';
+import { getAllCategories } from '../services/categoryService';
 import CartDrawer from './CartDrawer';
+
+import { useAuth } from '../hooks/useAuth';
+import { AppNotification } from '../services/notificationService';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,17 +22,11 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [pages, setPages] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const { user: authUser, profile } = useAuth();
   const { cart } = useCart();
   const navigate = useNavigate();
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     return subscribeToSettings(setSettings);
@@ -50,6 +49,18 @@ export default function Navbar() {
     fetchPages();
   }, []);
 
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const data = await getAllCategories();
+        setCategories(data);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    }
+    fetchCategories();
+  }, []);
+
   const handleSearch = (e: any) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -60,14 +71,14 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 glass-morphism border-b border-white/10">
+    <nav className="glass-morphism border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex items-center gap-3 group">
               {settings?.logoUrl ? (
                 <img 
-                  src={settings.logoUrl} 
+                  src={settings.logoUrl || undefined} 
                   alt={settings.storeName || 'KARMAGULLY'} 
                   className="h-8 w-auto object-contain"
                   referrerPolicy="no-referrer"
@@ -87,15 +98,49 @@ export default function Navbar() {
           </div>
           
           <div className="hidden md:block">
-            <div className="ml-10 flex items-baseline space-x-8">
+            <div className={`ml-10 flex items-baseline space-x-8 transition-all duration-300 ${isSearchOpen ? 'w-0 opacity-0 invisible overflow-hidden' : 'w-auto opacity-100 visible'}`}>
               <Link to="/" className="text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em] px-1">Home</Link>
               <Link to="/shop" className="text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]">Collections</Link>
+              <Link to="/categories" className="text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]">Categories</Link>
+              
+              {/* Pages Dropdown */}
+              {pages.length > 0 && (
+                <div className="relative group/pages">
+                  <button 
+                    className="flex items-center gap-1 text-slate-400 group-hover/pages:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]"
+                    onClick={() => setIsPagesOpen(!isPagesOpen)}
+                  >
+                    Pages <ChevronDown className="w-3 h-3" />
+                  </button>
+                  <div className="absolute top-full left-0 mt-2 w-48 glass-morphism border border-white/10 rounded-xl py-2 opacity-0 invisible group-hover/pages:opacity-100 group-hover/pages:visible transition-all z-50">
+                    <Link 
+                      to="/pages" 
+                      className="block px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/5 transition-all"
+                    >
+                      All Pages
+                    </Link>
+                    <div className="h-px bg-white/5 my-1" />
+                    {pages.map(page => (
+                      <Link 
+                        key={page.slug}
+                        to={`/page/${page.slug}`}
+                        className="block px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/5 transition-all"
+                      >
+                        {page.title}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Link to="/blog" className="text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]">Blog</Link>
+              <Link to="/support" className="text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]">Support</Link>
               <Link to="/shop?category=Featured" className="text-slate-400 hover:text-white transition-colors text-[10px] font-black uppercase tracking-[0.2em]">Featured</Link>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center relative mr-2">
+            <div className="hidden lg:flex items-center relative mr-2">
                <button 
                 onClick={() => setIsSearchOpen(!isSearchOpen)}
                 className="p-2 text-slate-400 hover:text-white transition-colors"
@@ -106,7 +151,7 @@ export default function Navbar() {
                  {isSearchOpen && (
                    <motion.form 
                     initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 200, opacity: 1 }}
+                    animate={{ width: 250, opacity: 1 }}
                     exit={{ width: 0, opacity: 0 }}
                     onSubmit={handleSearch}
                     className="absolute right-full mr-2"
@@ -117,7 +162,7 @@ export default function Navbar() {
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       placeholder="Search posters..."
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-white font-bold uppercase tracking-widest focus:outline-none focus:border-purple-500 placeholder:text-white/10"
                      />
                    </motion.form>
                  )}
@@ -136,11 +181,11 @@ export default function Navbar() {
               )}
             </button>
             <Link 
-              to={user ? "/profile" : "/admin/login"} 
+              to={authUser ? "/profile" : "/admin/login"} 
               className="hidden md:flex items-center gap-2 px-5 py-2 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-purple-600 hover:text-white transition-all shadow-lg shadow-white/5"
             >
               <User className="w-3 h-3" />
-              {user ? 'Account' : 'Sign In'}
+              {authUser ? 'Account' : 'Sign In'}
             </Link>
             <button 
               onClick={() => setIsOpen(!isOpen)}
@@ -189,7 +234,28 @@ export default function Navbar() {
               >
                 Collections
               </Link>
+              <Link 
+                to="/categories" 
+                onClick={() => setIsOpen(false)} 
+                className="block text-3xl font-black italic uppercase tracking-tighter hover:text-purple-500 transition-colors"
+              >
+                Categories
+              </Link>
+              <Link 
+                to="/blog" 
+                onClick={() => setIsOpen(false)} 
+                className="block text-3xl font-black italic uppercase tracking-tighter hover:text-purple-500 transition-colors"
+              >
+                Blog
+              </Link>
 
+              <Link 
+                to="/support" 
+                onClick={() => setIsOpen(false)} 
+                className="block text-3xl font-black italic uppercase tracking-tighter hover:text-purple-500 transition-colors"
+              >
+                Support
+              </Link>
               <Link 
                 to="/pages" 
                 onClick={() => setIsOpen(false)} 
@@ -199,12 +265,14 @@ export default function Navbar() {
               </Link>
 
               <Link 
-                to={user ? "/profile" : "/admin/login"} 
+                to={authUser ? "/profile" : "/admin/login"} 
                 onClick={() => setIsOpen(false)} 
                 className="block text-3xl font-black italic uppercase tracking-tighter hover:text-purple-500 transition-colors"
               >
-                {user ? 'My Account' : 'Sign In'}
+                {authUser ? 'My Account' : 'Sign In'}
               </Link>
+              
+
               
               <div className="pt-6 border-t border-white/5">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20 mb-4">The Gully Social</p>

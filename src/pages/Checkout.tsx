@@ -1,21 +1,31 @@
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShoppingCart, ArrowRight, ShieldCheck, CreditCard, Info, Truck } from 'lucide-react';
+import { ShoppingCart, ArrowRight, CreditCard, Info, Truck } from 'lucide-react';
 import { useCart } from '../hooks/useCart';
 import { useRazorpay } from '../hooks/useRazorpay';
 import { createOrder } from '../services/orderService';
-import { getCoupon, Coupon } from '../services/couponService';
-import { auth } from '../lib/firebase';
-import { Tag, CheckCircle2 } from 'lucide-react';
-const API_BASE = "https://karmagully-website.onrender.com";
+import { getCoupon, Coupon, incrementCouponUsage } from '../services/couponService';
+import { checkStockAvailability } from '../services/productService';
+import { auth, db } from '../lib/firebase';
+import { Tag, CheckCircle2, Zap, User, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { subscribeToSettings } from '../services/settingsService';
+import { AppSettings } from '../types';
 
 export default function Checkout() {
   const { cart, total, clearCart } = useCart();
   const navigate = useNavigate();
   const { displayRazorpay, loading: rpLoading } = useRazorpay();
   const [loading, setLoading] = useState(false);
+  const [showCodInfo, setShowCodInfo] = useState(false);
+  const { user, profile } = useAuth();
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [isOrderPlaced, setIsOrderPlaced] = useState(false);
   
+  const isTrusted = profile?.isTrustedBuyer || profile?.loyaltyStatus === 'approved';
+  const codVerAmount = settings?.loyalty?.codVerificationAmount || 99;
+
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -35,14 +45,18 @@ export default function Checkout() {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
 
   useEffect(() => {
-    if (auth.currentUser) {
+    return subscribeToSettings(setSettings);
+  }, []);
+
+  useEffect(() => {
+    if (user) {
       setFormData(prev => ({
         ...prev,
-        fullName: auth.currentUser?.displayName || '',
-        email: auth.currentUser?.email || '',
+        fullName: user.displayName || prev.fullName,
+        email: user.email || prev.email,
       }));
     }
-  }, []);
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -66,6 +80,8 @@ export default function Checkout() {
         setCouponError('Coupon is not yet active (scheduled start)');
       } else if (coupon.minOrderAmount && total < coupon.minOrderAmount) {
         setCouponError(`Min order amount for this coupon is ₹${coupon.minOrderAmount}`);
+      } else if (coupon.usageLimit && (coupon.usageCount || 0) >= coupon.usageLimit) {
+        setCouponError('Coupon usage limit reached');
       } else {
         setAppliedCoupon(coupon);
         setCouponCode('');
@@ -87,10 +103,17 @@ export default function Checkout() {
 
   const discountedTotal = getDiscountedTotal();
 
-  const handlePlaceOrder = async (paymentId?: string, razorpayOrderId?: string) => {
+  const handlePlaceOrder = async (paymentId?: string, razorpayOrderId?: string, isCodVerifiedFee: boolean = false) => {
     try {
+      // Final Pre-Flight Stock Check
+      const stockCheck = await checkStockAvailability(cart.map(i => ({ productId: i.productId, quantity: i.quantity, name: i.name })));
+      if (!stockCheck.available) {
+        throw new Error(stockCheck.error || "Inventory depletion detected.");
+      }
+
       const orderData = {
-        userId: auth.currentUser?.uid || null, // Link to account
+        userId: user?.uid || auth.currentUser?.uid || null, // Link to account
+        profileId: profile?.profileId || null, // Link to unique public ID
         items: cart.map(item => ({
           productId: item.productId,
           name: item.name,
@@ -100,11 +123,13 @@ export default function Checkout() {
           imageUrl: item.imageUrl
         })),
         totalAmount: discountedTotal,
+        advancePaid: isCodVerifiedFee ? (settings?.loyalty?.codVerificationAmount || 0) : (formData.paymentMode === 'Online' ? discountedTotal : 0),
+        isCodVerified: isCodVerifiedFee || isTrusted,
         customerInfo: {
           fullName: formData.fullName,
           phone: formData.phone,
           alternatePhone: formData.altPhone,
-          email: formData.email
+          email: formData.email.toLowerCase().trim()
         },
         address: {
           fullAddress: formData.address,
@@ -114,7 +139,7 @@ export default function Checkout() {
           pincode: formData.pincode
         },
         paymentType: formData.paymentMode as any,
-        paymentStatus: paymentId ? 'Success' : 'Pending',
+        paymentStatus: (formData.paymentMode === 'Online') ? 'Success' : 'Pending',
         orderStatus: 'Pending',
         razorpayOrderId: razorpayOrderId || null,
         razorpayPaymentId: paymentId || null
@@ -122,9 +147,14 @@ export default function Checkout() {
 
       const orderId = await createOrder(orderData as any);
       if (!orderId) throw new Error("Database Write Failed");
+
+      // Increment coupon usage if applied
+      if (appliedCoupon) {
+        incrementCouponUsage(appliedCoupon.code).catch(err => console.error("Failed to increment coupon usage:", err));
+      }
       
       // Trigger Notifications (Email + Telegram) in background
-      fetch(`${API_BASE}/api/notifications/order`, {
+      fetch('/api/notifications/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -134,8 +164,12 @@ export default function Checkout() {
         })
       }).catch(err => console.error("Notification trigger failed:", err));
 
+      // Order Success Sequence
+      setIsOrderPlaced(true);
       clearCart();
-      navigate(`/success?orderId=${orderId}&new=true`);
+      setTimeout(() => {
+        navigate(`/success?orderId=${orderId}&new=true`, { replace: true });
+      }, 100);
     } catch (error: any) {
       console.error("Order creation failed:", error);
       setErrorMessage(error.message || "Failed to finalize order. Check your connection.");
@@ -148,12 +182,27 @@ export default function Checkout() {
     setLoading(true);
     setErrorMessage(null);
 
-    if (formData.paymentMode === 'Online') {
+    const isCodVerificationNeeded = 
+      formData.paymentMode === 'COD' && 
+      settings?.loyalty?.isCodVerificationEnabled && 
+      !profile?.isTrustedBuyer;
+
+    if (formData.paymentMode === 'Online' || isCodVerificationNeeded) {
       try {
-        const response = await fetch('https://karmagully-website.onrender.com/api/razorpay/order', {
+        // Pre-Payment Stock Check
+        const stockCheck = await checkStockAvailability(cart.map(i => ({ productId: i.productId, quantity: i.quantity, name: i.name })));
+        if (!stockCheck.available) {
+          throw new Error(stockCheck.error);
+        }
+
+        const paymentAmount = isCodVerificationNeeded 
+          ? (settings?.loyalty?.codVerificationAmount || 99) 
+          : discountedTotal;
+
+        const response = await fetch('/api/razorpay/order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: discountedTotal, receipt: `order_${Date.now()}` })
+          body: JSON.stringify({ amount: paymentAmount, receipt: `order_${Date.now()}` })
         });
         
         const data = await response.json();
@@ -163,22 +212,22 @@ export default function Checkout() {
         }
 
         const options = {
-          key: import.meta.env.VITE_RAZORPAY_KEY_ID, // Must be provided by user
+          key: import.meta.env.VITE_RAZORPAY_KEY_ID,
           amount: data.amount,
           currency: data.currency,
           name: "KarmaGully",
-          description: "Premium Anime Posters",
+          description: isCodVerificationNeeded ? "Secure COD Advance" : "Premium Anime Posters",
           order_id: data.id,
           handler: async (response: any) => {
             try {
-              const verifyRes = await fetch('https://karmagully-website.onrender.com/api/razorpay/verify', {
+              const verifyRes = await fetch('/api/razorpay/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(response)
               });
               const verifyData = await verifyRes.json();
               if (verifyData.status === 'success') {
-                handlePlaceOrder(response.razorpay_payment_id, response.razorpay_order_id);
+                handlePlaceOrder(response.razorpay_payment_id, response.razorpay_order_id, isCodVerificationNeeded);
               } else {
                 setErrorMessage("Payment verification failed. Re-authentication required.");
                 setLoading(false);
@@ -212,12 +261,23 @@ export default function Checkout() {
         setLoading(false);
       }
     } else {
-      // COD
-      await handlePlaceOrder();
+      // COD - Still check stock
+      try {
+        const stockCheck = await checkStockAvailability(cart.map(i => ({ productId: i.productId, quantity: i.quantity, name: i.name })));
+        if (!stockCheck.available) {
+          setErrorMessage(stockCheck.error || "Stock error.");
+          setLoading(false);
+          return;
+        }
+        await handlePlaceOrder();
+      } catch (err: any) {
+        setErrorMessage(err.message);
+        setLoading(false);
+      }
     }
   };
 
-  if (cart.length === 0) {
+  if (cart.length === 0 && !isOrderPlaced) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-4">
         <ShoppingCart className="w-16 h-16 text-white/10 mb-6" />
@@ -252,7 +312,7 @@ export default function Checkout() {
               {cart.map((item) => (
                 <div key={`${item.productId}-${item.variantName}`} className="flex items-center gap-6 p-4 bg-white/5 rounded-2xl border border-white/10">
                   <div className="w-24 h-32 bg-dark-bg rounded-xl overflow-hidden border border-white/10 shrink-0">
-                    <img src={item.imageUrl} className="w-full h-full object-cover opacity-80" />
+                    <img src={item.imageUrl || undefined} className="w-full h-full object-cover opacity-80" />
                   </div>
                   <div className="flex-grow">
                     <h3 className="font-bold uppercase tracking-tight text-lg leading-none mb-1">{item.name}</h3>
@@ -364,16 +424,85 @@ export default function Checkout() {
                     <PaymentOption 
                       active={formData.paymentMode === 'COD'} 
                       onClick={() => setFormData(p => ({ ...p, paymentMode: 'COD' }))}
-                      label="Post-Arrival"
-                      sub="COD Available"
+                      label="Pay On Delivery"
+                      sub={settings?.loyalty?.isCodVerificationEnabled && !isTrusted ? `₹${codVerAmount} Secure COD Advance` : 'COD Available'}
+                      icon={settings?.loyalty?.isCodVerificationEnabled && !isTrusted ? <Zap className="w-3 h-3 text-purple-400" /> : null}
                     />
                     <PaymentOption 
                       active={formData.paymentMode === 'Online'} 
                       onClick={() => setFormData(p => ({ ...p, paymentMode: 'Online' }))}
                       label="Pay Online"
-                      sub="UPI / RuPay / Cards"
+                      sub="Full Series Pay"
                     />
                   </div>
+                  
+                  {formData.paymentMode === 'COD' && settings?.loyalty?.isCodVerificationEnabled && !isTrusted && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex flex-col gap-3"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                          <ShieldCheck className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-grow space-y-1">
+                          <h4 className="text-xs font-black uppercase tracking-tight">Secure COD Advance</h4>
+                          <p className="text-[9px] text-white/40 font-bold leading-relaxed uppercase">
+                            ₹{codVerAmount} Verification Deposit to reserve your slot. This amount is <span className="text-purple-400">deducted</span> from your final COD bill.
+                          </p>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => setShowCodInfo(!showCodInfo)}
+                          className="text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-purple-300"
+                        >
+                          {showCodInfo ? 'Less' : 'More'}
+                        </button>
+                      </div>
+                      
+                      <AnimatePresence>
+                        {showCodInfo && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pt-3 border-t border-white/5 space-y-3">
+                              <p className="text-[9px] text-white/40 leading-relaxed font-bold uppercase tracking-wide">
+                                <span className="text-purple-400">Why Secure Advance?</span> Verification helps us reserve limited inventory for genuine collectors. 
+                              </p>
+                              <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                                <p className="text-[10px] font-black uppercase tracking-tight text-white/60 mb-1">PRO-TIP: GO PREPAID</p>
+                                <p className="text-[9px] text-white/30 font-bold leading-relaxed uppercase">
+                                  Skip COD verification and unlock: <span className="text-emerald-500">Priority Dispatch</span>, <span className="text-emerald-500">Faster Processing</span>, and Access to <span className="text-emerald-500">Exclusive Future Drops</span>.
+                                </p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  )}
+
+                  {!user && (
+                    <div className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-4 relative overflow-hidden group">
+                       <div className="absolute top-0 right-0 p-1">
+                         <Zap className="w-12 h-12 text-purple-600/10 -rotate-12 group-hover:scale-125 transition-transform" />
+                       </div>
+                       <div className="w-10 h-10 bg-purple-600/20 rounded-xl flex items-center justify-center shrink-0">
+                         <User className="w-5 h-5 text-purple-400" />
+                       </div>
+                       <div className="flex-grow">
+                          <h4 className="text-[10px] font-black uppercase tracking-tight text-white/60">Sign Up Now</h4>
+                          <p className="text-[8px] text-white/20 font-bold uppercase tracking-widest leading-relaxed">
+                            Create an account to <span className="text-purple-500">track order status & history</span>, unlock <span className="text-purple-500">Trusted Buyer</span> benefits, and skip future COD verification.
+                          </p>
+                       </div>
+                       <Link to="/admin/login" className="px-3 py-2 bg-white/5 rounded-lg text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-white/10 transition-colors z-10">Unlock</Link>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -423,19 +552,22 @@ function InputField({ label, ...props }: any) {
   );
 }
 
-function PaymentOption({ active, onClick, label, sub }: any) {
+function PaymentOption({ active, onClick, label, sub, icon }: any) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`p-4 rounded-xl border transition-all text-left group ${
+      className={`p-4 rounded-xl border transition-all text-left group relative ${
         active 
           ? 'bg-purple-500/10 border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.1)]' 
           : 'bg-white/5 border-white/10 hover:border-white/20'
       }`}
     >
-      <div className={`w-4 h-4 rounded-full border-2 mb-3 flex items-center justify-center ${active ? 'border-purple-500' : 'border-white/20'}`}>
-        {active && <div className="w-2 h-2 bg-purple-500 rounded-full" />}
+      <div className="flex justify-between items-start mb-3">
+        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${active ? 'border-purple-500' : 'border-white/20'}`}>
+          {active && <div className="w-2 h-2 bg-purple-500 rounded-full" />}
+        </div>
+        {icon}
       </div>
       <p className={`text-xs font-black uppercase tracking-tighter ${active ? 'text-white' : 'text-slate-400'}`}>{label}</p>
       <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{sub}</p>

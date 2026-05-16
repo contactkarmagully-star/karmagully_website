@@ -44,7 +44,10 @@ export async function addAdmin(uid: string, email: string) {
 
 export async function removeAdmin(uid: string) {
   try {
+    console.log("Removing admin:", uid);
     await deleteDoc(doc(db, COLLECTION_NAME, uid));
+    const { dataCache } = await import('../lib/dataCache');
+    dataCache.clear();
   } catch (error) {
     return handleFirestoreError(error, 'delete', `${COLLECTION_NAME}/${uid}`);
   }

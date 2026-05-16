@@ -110,7 +110,7 @@ export default function CustomPage() {
                 className="aspect-video relative rounded-[2rem] overflow-hidden border border-white/10"
               >
                 <img 
-                  src={section.value} 
+                  src={section.value || undefined} 
                   alt={page.title}
                   className="w-full h-full object-cover"
                 />
@@ -140,7 +140,7 @@ export default function CustomPage() {
                   />
                 ) : (
                   <video 
-                    src={section.value} 
+                    src={section.value || undefined} 
                     controls 
                     className="w-full h-full object-cover"
                   />

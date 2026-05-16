@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Clock, Zap } from 'lucide-react';
-import { subscribeToSettings, AppSettings } from '../services/settingsService';
+import { subscribeToSettings } from '../services/settingsService';
+import { AppSettings } from '../types';
 
 export default function FlashSaleCard() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -41,26 +42,26 @@ export default function FlashSaleCard() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-br from-neon-blue/20 to-purple-600/20 border border-neon-blue/30 rounded-3xl p-6 md:p-8 relative overflow-hidden"
+      className="bg-gradient-to-br from-neon-blue/20 to-purple-600/20 border border-neon-blue/30 rounded-3xl p-4 md:p-8 relative overflow-hidden"
     >
       <div className="absolute top-0 right-0 p-4 opacity-10">
-        <Zap className="w-32 h-32 text-neon-blue" />
+        <Zap className="w-24 h-24 md:w-32 md:h-32 text-neon-blue" />
       </div>
       
-      <div className="flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 md:gap-6 relative z-10">
         <div className="text-center md:text-left">
-          <p className="text-neon-blue font-black uppercase tracking-[0.4em] text-[10px] mb-2 flex items-center justify-center md:justify-start gap-2">
+          <p className="text-neon-blue font-black uppercase tracking-[0.4em] text-[8px] md:text-[10px] mb-1 md:mb-2 flex items-center justify-center md:justify-start gap-2">
             <Clock className="w-3 h-3" /> Flash Drop Active
           </p>
-          <h2 className="text-3xl md:text-5xl font-black italic uppercase tracking-tighter mb-2">
+          <h2 className="text-xl md:text-5xl font-black italic uppercase tracking-tighter mb-1 md:mb-2">
             {settings.flashSale.title}
           </h2>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] md:text-xs">
             {settings.flashSale.discountText}
           </p>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex gap-2 md:gap-4">
           <TimeUnit value={timeLeft.h} label="HRS" />
           <TimeUnit value={timeLeft.m} label="MIN" />
           <TimeUnit value={timeLeft.s} label="SEC" />
@@ -73,12 +74,12 @@ export default function FlashSaleCard() {
 function TimeUnit({ value, label }: { value: number, label: string }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="w-16 h-16 md:w-20 md:h-20 bg-dark-bg/80 border border-white/10 rounded-2xl flex items-center justify-center mb-1 shadow-2xl">
-        <span className="text-2xl md:text-3xl font-black italic tracking-tighter text-white">
+      <div className="w-10 h-10 md:w-20 md:h-20 bg-dark-bg/80 border border-white/10 rounded-xl md:rounded-2xl flex items-center justify-center mb-1 shadow-2xl">
+        <span className="text-lg md:text-3xl font-black italic tracking-tighter text-white">
           {value.toString().padStart(2, '0')}
         </span>
       </div>
-      <span className="text-[8px] font-black tracking-widest text-white/30 uppercase">{label}</span>
+      <span className="text-[6px] md:text-[8px] font-black tracking-widest text-white/30 uppercase">{label}</span>
     </div>
   );
 }

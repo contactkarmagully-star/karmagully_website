@@ -39,6 +39,52 @@
   @apply bg-black/40 backdrop-blur-md border border-white/10;
 }
 
+.blog-image, .markdown-body img {
+  width: 100%;
+  border-radius: 2rem;
+  margin: 3rem 0;
+  display: block;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.markdown-body {
+  @apply text-white/80 leading-relaxed;
+}
+
+.markdown-body h1, .markdown-body h2 {
+  @apply text-3xl md:text-5xl font-black italic uppercase tracking-tighter mt-16 mb-8 text-white;
+}
+
+.markdown-body h3 {
+  @apply text-2xl font-black italic uppercase tracking-tight mt-12 mb-6 text-purple-500;
+}
+
+.markdown-body p {
+  @apply mb-8 text-sm md:text-base;
+}
+
+.markdown-body ul {
+  @apply space-y-4 mb-12 list-none;
+}
+
+.markdown-body ul li {
+  @apply flex items-start gap-4 text-sm md:text-base;
+}
+
+.markdown-body ul li::before {
+  content: "⚡";
+  @apply flex items-center justify-center w-8 h-8 shrink-0 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[10px] shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-transform;
+}
+
+.markdown-body img {
+  @apply transition-transform duration-1000 hover:scale-[1.02];
+}
+
+.markdown-body a {
+  @apply text-purple-500 font-bold hover:text-white transition-colors duration-300;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

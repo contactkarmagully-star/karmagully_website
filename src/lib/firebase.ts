@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
@@ -43,7 +43,7 @@ export function handleFirestoreError(error: any, operation: FirestoreErrorInfo['
         userId: user?.uid || 'anonymous',
         email: user?.email || 'none',
         emailVerified: user?.emailVerified || false,
-        isAnonymous: user?.isAnonymous || true,
+        isAnonymous: user ? user.isAnonymous : true,
         providerInfo: user?.providerData.map(p => ({
           providerId: p.providerId,
           displayName: p.displayName || '',

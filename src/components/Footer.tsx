@@ -1,7 +1,8 @@
-import { Zap, Instagram, Twitter, Facebook, Send, Phone } from 'lucide-react';
+import { Zap, Instagram, Twitter, Facebook, Send, Phone, Youtube } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { subscribeToSettings, AppSettings } from '../services/settingsService';
+import { subscribeToSettings } from '../services/settingsService';
+import { AppSettings } from '../types';
 
 export default function Footer() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -19,7 +20,7 @@ export default function Footer() {
         </div>
         <div className="flex items-center gap-2 border-l border-white/5 pl-4 hidden md:flex">
           <div className="w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
-          <span>4-7 Days Fast Shipping</span>
+          <span>7-10 Days Fast Shipping</span>
         </div>
         
         <div className="flex items-center gap-6 border-l border-white/5 pl-6">
@@ -41,6 +42,11 @@ export default function Footer() {
           {settings?.socialLinks?.telegram && (
             <a href={settings.socialLinks.telegram} target="_blank" rel="noreferrer" className="hover:text-sky-500 transition-colors">
               <Send className="w-4 h-4" />
+            </a>
+          )}
+          {settings?.socialLinks?.youtube && (
+            <a href={settings.socialLinks.youtube} target="_blank" rel="noreferrer" className="hover:text-red-500 transition-colors">
+              <Youtube className="w-4 h-4" />
             </a>
           )}
           {settings?.socialLinks?.whatsapp && (

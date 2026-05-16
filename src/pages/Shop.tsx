@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, SlidersHorizontal } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import { Product } from '../types';
+import { Product, Category } from '../types';
 import { getAllProducts } from '../services/productService';
+import { getAllCategories } from '../services/categoryService';
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -12,27 +13,35 @@ export default function Shop() {
   const categoryParam = searchParams.get('category') || 'All';
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>(['All']);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getAllProducts();
-        setProducts(data);
+        const [productData, categoryData] = await Promise.all([
+          getAllProducts(60, true),
+          getAllCategories()
+        ]);
+        setProducts(productData);
+        const catNames = ['All', ...categoryData.map(c => c.name)];
+        // Also include any legacy categories from products
+        const legacyCats = productData.map(p => p.category).filter(c => c && !catNames.includes(c));
+        setCategories([...new Set([...catNames, ...legacyCats])]);
       } catch (error) {
-        console.error("Error fetching products:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchProducts();
+    fetchData();
   }, []);
-
-  const categories = ['All', ...new Set(products.map(p => p.category))];
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryParam === 'All' || p.category === categoryParam;
+    const matchesCategory = categoryParam === 'All' || 
+                           p.category === categoryParam || 
+                           (p.categories && p.categories.includes(categoryParam));
     return matchesSearch && matchesCategory;
   });
 
@@ -42,16 +51,16 @@ export default function Shop() {
       animate={{ opacity: 1 }}
       className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
     >
-      <header className="mb-4 space-y-3">
-        <div className="flex flex-col md:flex-row justify-between items-end gap-3 border-b border-white/5 pb-3">
-          <div className="space-y-1">
-            <h1 className="text-3xl md:text-5xl font-black italic uppercase leading-none tracking-tighter">
+      <header className="mb-4 space-y-6">
+        <div className="flex flex-col items-center gap-3 border-b border-white/5 pb-6">
+          <div className="space-y-2 text-center">
+            <h1 className="text-4xl md:text-6xl font-black italic uppercase leading-none tracking-tighter">
               The <span className="text-gradient">Collections</span>
             </h1>
-            <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[9px]">Filtering {filteredProducts.length} Exclusive Drops</p>
+            <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[10px]">Filtering {filteredProducts.length} Exclusive Drops</p>
           </div>
           
-          <div className="relative w-full md:max-w-xs">
+          <div className="relative w-full md:max-w-md mx-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
             <input 
               type="text" 
